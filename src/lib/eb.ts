@@ -10,10 +10,10 @@ function getTenantFromHost(host?: string): string {
 
 export async function ebFetch(path: string, init?: RequestInit) {
   const EB = process.env.EB_API_BASE!;
-  const h = headers();
-
-  // Prefer the header from middleware, but fall back to host parsing
-  const tenant = h.get("x-tenant-id") || getTenantFromHost(h.get("host") || "") || "primary";
+  const h = await headers(); // <-- Next 15: await this
+  const host = h.get("host") ?? "";
+  const tenantHeader = h.get("x-tenant-id") ?? "";
+  const tenant = tenantHeader || getTenantFromHost(host) || "primary";
 
   const res = await fetch(`${EB}${path}`, {
     ...init,
@@ -28,6 +28,10 @@ export async function ebFetch(path: string, init?: RequestInit) {
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${path} ${res.status}: ${text || res.statusText}`);
+  }
+  return res;
+}
+ew Error(`${path} ${res.status}: ${text || res.statusText}`);
   }
   return res;
 }
