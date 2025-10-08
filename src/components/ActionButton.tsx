@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   endpoint: "/api/actions/on-demand-read" | "/api/actions/on-demand-write";
@@ -9,38 +9,35 @@ type Props = {
 
 export default function ActionButton({ endpoint, label }: Props) {
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<"success" | "error" | null>(null);
-  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState<string>("");
+
+  // DEBUG: confirm hydration
+  useEffect(() => {
+    console.log(`[ActionButton] mounted for ${label}`);
+    const el = document.getElementById(`${label.replace(/\s+/g, "-")}-status`);
+    if (el) el.textContent = "🧩 Client component mounted";
+  }, [label]);
 
   async function handleClick() {
+    console.log(`[ActionButton] clicked ${label}`);
     setLoading(true);
-    setStatus(null);
-    setMessage("");
+    setStatus("⏳ Running...");
     try {
       const res = await fetch(endpoint, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.ok) {
-        setStatus("success");
-        setMessage("✅ Success! The action completed successfully.");
-      } else {
-        setStatus("error");
-        setMessage(`❌ Request failed: ${data?.error || res.statusText}`);
-      }
+      console.log(`[ActionButton] response`, res.status, data);
+      if (res.ok && data?.ok) setStatus("✅ Success!");
+      else setStatus(`❌ Failed (${res.status})`);
     } catch (err: any) {
-      setStatus("error");
-      setMessage(`❌ Error: ${String(err?.message ?? err)}`);
+      console.error(`[ActionButton] error`, err);
+      setStatus(`❌ Error: ${String(err?.message ?? err)}`);
     } finally {
       setLoading(false);
-      // Keep visible for 6 seconds
-      setTimeout(() => {
-        setStatus(null);
-        setMessage("");
-      }, 6000);
     }
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 border p-3 rounded">
       <button
         type="button"
         onClick={handleClick}
@@ -49,20 +46,8 @@ export default function ActionButton({ endpoint, label }: Props) {
       >
         {loading ? "Running..." : label}
       </button>
-
-      {/* Always show a message area */}
-      <div className="min-h-[1.5rem] text-sm transition-opacity">
-        {message && (
-          <div
-            className={`p-2 rounded ${
-              status === "success"
-                ? "bg-green-100 text-green-700"
-                : "bg-red-100 text-red-700"
-            }`}
-          >
-            {message}
-          </div>
-        )}
+      <div id={`${label.replace(/\s+/g, "-")}-status`} className="text-sm text-gray-600">
+        {status}
       </div>
     </div>
   );
