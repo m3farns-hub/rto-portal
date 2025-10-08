@@ -9,7 +9,8 @@ async function getStatus() {
 }
 
 export default async function Dashboard() {
-  if (!getSessionToken()) redirect("/sign-in");
+  const token = await getSessionToken();
+if (!token) redirect("/sign-in");
 
   const status = await getStatus().catch(() => ({ ok: false }));
 

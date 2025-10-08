@@ -2,6 +2,6 @@ import { NextResponse } from 'next/server';
 import { clearSessionToken } from '@/lib/cookies';
 
 export async function POST() {
-  clearSessionToken();
+  await clearSessionToken();
   return NextResponse.json({ ok: true });
 }
