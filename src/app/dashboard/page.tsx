@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 import { redirect } from "next/navigation";
 import { ebFetch } from "@/lib/eb";
 import { getSessionToken } from "@/lib/cookies";
@@ -16,6 +19,10 @@ export default async function Dashboard() {
       <h1 className="text-2xl font-semibold">Store Dashboard</h1>
 
       {/* Client-side section */}
+<div id="hydrate-check" className="text-blue-600">
+  🧩 Hydration test placeholder
+</div>
+
       <DashboardClient />
 
       <section>
