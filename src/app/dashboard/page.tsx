@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { ebFetch } from "@/lib/eb";
 import { getSessionToken } from "@/lib/cookies";
-import ActionButton from "@/components/ActionButton";
+import DashboardClient from "@/components/DashboardClient";
 
 export default async function Dashboard() {
   const token = await getSessionToken();
@@ -15,10 +15,8 @@ export default async function Dashboard() {
     <main className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Store Dashboard</h1>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <ActionButton endpoint="/api/actions/on-demand-read" label="Run On-Demand Read" />
-        <ActionButton endpoint="/api/actions/on-demand-write" label="Run On-Demand Write" />
-      </div>
+      {/* Client-side section */}
+      <DashboardClient />
 
       <section>
         <h2 className="font-medium mb-2">API Status</h2>
