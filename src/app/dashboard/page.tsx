@@ -1,16 +1,14 @@
-// src/app/dashboard/page.tsx
 import { redirect } from "next/navigation";
 import { ebFetch } from "@/lib/eb";
 import { getSessionToken } from "@/lib/cookies";
+import ActionButton from "@/components/ActionButton";
 
 export default async function Dashboard() {
-  // Make sure user is signed in
   const token = await getSessionToken();
   if (!token) redirect("/sign-in");
 
-  // Load API status
   const status = await ebFetch("/status")
-    .then((res) => res.json())
+    .then((r) => r.json())
     .catch(() => ({ ok: false }));
 
   return (
@@ -18,37 +16,17 @@ export default async function Dashboard() {
       <h1 className="text-2xl font-semibold">Store Dashboard</h1>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {/* --- On-Demand Read --- */}
-        <form
-          action={async () => {
-            "use server";
-            await ebFetch("/actions/on-demand-read", { method: "POST" });
-          }}
-        >
-          <button className="w-full rounded bg-black text-white py-3">
-            Run On-Demand Read
-          </button>
-        </form>
-
-        {/* --- On-Demand Write --- */}
-        <form
-          action={async () => {
-            "use server";
-            await ebFetch("/actions/on-demand-write", { method: "POST" });
-          }}
-        >
-          <button className="w-full rounded bg-black text-white py-3">
-            Run On-Demand Write
-          </button>
-        </form>
+        <ActionButton endpoint="/api/actions/on-demand-read" label="Run On-Demand Read" />
+        <ActionButton endpoint="/api/actions/on-demand-write" label="Run On-Demand Write" />
       </div>
 
-      {/* --- Show API Status --- */}
-      <pre className="text-sm bg-neutral-100 p-3 rounded">
-        {JSON.stringify(status, null, 2)}
-      </pre>
+      <section>
+        <h2 className="font-medium mb-2">API Status</h2>
+        <pre className="text-sm bg-neutral-100 p-3 rounded">
+          {JSON.stringify(status, null, 2)}
+        </pre>
+      </section>
 
-      {/* --- Logout --- */}
       <form
         action={async () => {
           "use server";
@@ -60,4 +38,5 @@ export default async function Dashboard() {
     </main>
   );
 }
+
 
