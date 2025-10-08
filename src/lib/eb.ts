@@ -10,7 +10,7 @@ function getTenantFromHost(host?: string): string {
 
 export async function ebFetch(path: string, init?: RequestInit) {
   const EB = process.env.EB_API_BASE!;
-  const h = await headers(); // <-- Next 15: await this
+  const h = await headers(); // Next 15: async
   const host = h.get("host") ?? "";
   const tenantHeader = h.get("x-tenant-id") ?? "";
   const tenant = tenantHeader || getTenantFromHost(host) || "primary";
@@ -31,7 +31,4 @@ export async function ebFetch(path: string, init?: RequestInit) {
   }
   return res;
 }
-ew Error(`${path} ${res.status}: ${text || res.statusText}`);
-  }
-  return res;
-}
+
