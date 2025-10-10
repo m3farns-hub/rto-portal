@@ -1,4 +1,3 @@
-// src/middleware.ts
 import { NextResponse, NextRequest } from "next/server";
 
 function getTenantFromHost(host?: string): string {
@@ -8,16 +7,20 @@ function getTenantFromHost(host?: string): string {
 }
 
 export function middleware(req: NextRequest) {
+  const url = new URL(req.url);
   const host = req.headers.get("host") || "";
-  const tenant = getTenantFromHost(host);
 
-  // IMPORTANT: set the header on the *request* that continues downstream
+  // Redirect www -> apex
+  if (host.startsWith("www.")) {
+    url.host = host.slice(4); // drop "www."
+    return NextResponse.redirect(url, 308);
+  }
+
+  const tenant = getTenantFromHost(host);
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-tenant-id", tenant);
 
-  return NextResponse.next({
-    request: { headers: requestHeaders },
-  });
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
