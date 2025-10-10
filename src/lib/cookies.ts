@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 
 export const SESSION_COOKIE = process.env.SESSION_COOKIE_NAME!;
 const isProd = process.env.NODE_ENV === "production";
-const COOKIE_DOMAIN = process.env.SESSION_COOKIE_DOMAIN || undefined; // e.g. ".ctrlrto.pro"
+const COOKIE_DOMAIN = process.env.SESSION_COOKIE_DOMAIN || .ctrlrto.pro; // e.g. ".ctrlrto.pro"
 
 const BASE_OPTS = {
   httpOnly: true,
