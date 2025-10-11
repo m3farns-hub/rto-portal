@@ -2,22 +2,9 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type EBStatus = {
-  ok: boolean;
-  requestId: string | null;
-  service: string;
-  tenant: string;
-  time: string;
-  version: string;
-};
-
+type EBStatus = { ok: boolean; requestId: string|null; service: string; tenant: string; time: string; version: string; };
 type LoginBody = { token: string };
-
-type EBResponse<T = unknown> = {
-  ok: boolean;
-  status: number;
-  body: T | string;
-};
+type EBResponse<T = unknown> = { ok: boolean; status: number; body: T | string };
 
 async function callEB<T = unknown>(path: string, init?: RequestInit): Promise<EBResponse<T>> {
   "use server";
@@ -25,74 +12,31 @@ async function callEB<T = unknown>(path: string, init?: RequestInit): Promise<EB
   const tenant = "primary";
   const res = await fetch(`${base}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Tenant-Id": tenant,
-      ...(init?.headers || {}),
-    },
+    headers: { "Content-Type": "application/json", "X-Tenant-Id": tenant, ...(init?.headers || {}) },
     cache: "no-store",
   });
   const text = await res.text();
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text) as T;
-  } catch {
-    parsed = text; // leave as string if not JSON
-  }
-  return { ok: res.ok, status: res.status, body: parsed as T | string };
+  let body: T | string = text;
+  try { body = JSON.parse(text) as T; } catch {/* not JSON */}
+  return { ok: res.ok, status: res.status, body };
 }
 
 export default async function CheckPage() {
-  async function doStatus() {
-    "use server";
-    return callEB<EBStatus>("/status");
-  }
-  async function doLogin() {
-    "use server";
-    return callEB<LoginBody>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
-    });
-  }
-  async function doRead(token?: string) {
-    "use server";
-    return callEB("/actions/on-demand-read", {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-  }
+  async function doStatus() { "use server"; return callEB<EBStatus>("/status"); }
+  async function doLogin()  { "use server"; return callEB<LoginBody>("/auth/login", { method:"POST", body: JSON.stringify({ email:"demo@you.com", password:"demo" }) }); }
+  async function doRead(token?: string) { "use server"; return callEB("/actions/on-demand-read", { method:"POST", headers: token ? { Authorization: `Bearer ${token}` } : {} }); }
 
   const status = await doStatus();
   const login = await doLogin();
-  const token = typeof login.body === "object" && login.body && "token" in login.body
-    ? (login.body as LoginBody).token
-    : undefined;
-  const read = token ? await doRead(token) : { ok: false, status: 401, body: "No token" };
+  const token = typeof login.body === "object" && login.body && "token" in login.body ? (login.body as LoginBody).token : undefined;
+  const read = token ? await doRead(token) : { ok:false, status:401, body:"No token" };
 
   return (
     <main className="p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Connectivity Check</h1>
-
-      <section className="space-y-2">
-        <h2 className="font-medium">/status</h2>
-        <pre className="bg-neutral-100 p-3 rounded text-sm">
-          {JSON.stringify(status, null, 2)}
-        </pre>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="font-medium">/auth/login</h2>
-        <pre className="bg-neutral-100 p-3 rounded text-sm">
-          {JSON.stringify(login, null, 2)}
-        </pre>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="font-medium">/actions/on-demand-read</h2>
-        <pre className="bg-neutral-100 p-3 rounded text-sm">
-          {JSON.stringify(read, null, 2)}
-        </pre>
-      </section>
+      <section><h2 className="font-medium">/status</h2><pre className="bg-neutral-100 p-3 rounded text-sm">{JSON.stringify(status, null, 2)}</pre></section>
+      <section><h2 className="font-medium">/auth/login</h2><pre className="bg-neutral-100 p-3 rounded text-sm">{JSON.stringify(login, null, 2)}</pre></section>
+      <section><h2 className="font-medium">/actions/on-demand-read</h2><pre className="bg-neutral-100 p-3 rounded text-sm">{JSON.stringify(read, null, 2)}</pre></section>
     </main>
   );
 }

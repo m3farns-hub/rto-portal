@@ -9,25 +9,33 @@ function getTenantFromHost(host?: string): string {
   return parts.length < 3 ? "primary" : parts[0];
 }
 
-export async function ebFetch(path: string, init?: RequestInit) {
+export async function ebFetch(path: string, init: RequestInit = {}) {
   const EB = process.env.EB_API_BASE!;
-  const h = await headers();
-
+  const h = await headers(); // Next 15
   const host = h.get("host") ?? "";
-  const tenantHeader = h.get("x-tenant-id") ?? "";
-  const tenant = tenantHeader || getTenantFromHost(host) || "primary";
+  const tenant = h.get("x-tenant-id") ?? getTenantFromHost(host) ?? "primary";
 
-  // Pull token from httpOnly session cookie and add Authorization if not provided
-  const token = await getSessionToken();
-  const hasAuth = !!(init?.headers as Record<string, string> | undefined)?.["Authorization"];
+  // Normalize incoming headers
+  const incoming: Record<string, string> = {};
+  if (init.headers instanceof Headers) {
+    init.headers.forEach((v, k) => (incoming[k.toLowerCase()] = v));
+  } else if (Array.isArray(init.headers)) {
+    for (const [k, v] of init.headers) incoming[String(k).toLowerCase()] = String(v);
+  } else if (init.headers && typeof init.headers === "object") {
+    for (const k of Object.keys(init.headers as any)) incoming[k.toLowerCase()] = String((init.headers as any)[k]);
+  }
+
+  // Add Authorization from session if caller didn’t set it
+  const hasAuth = "authorization" in incoming;
+  const token = hasAuth ? null : await getSessionToken();
 
   const res = await fetch(`${EB}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
-      "X-Tenant-Id": tenant,
-      ...(token && !hasAuth ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers || {}),
+      "content-type": incoming["content-type"] || "application/json",
+      "x-tenant-id": tenant,
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...incoming,
     },
     cache: "no-store",
   });
@@ -38,4 +46,5 @@ export async function ebFetch(path: string, init?: RequestInit) {
   }
   return res;
 }
+
 
