@@ -12,13 +12,10 @@ function getTenantFromHost(host?: string): string {
 export async function ebFetch(path: string, init: RequestInit = {}) {
   const EB = process.env.EB_API_BASE!;
   const h = await headers(); // Next 15
-  const host = h.get("host") ?? "";
-  const tenantHeader = h.get("x-tenant-id") ?? "";
-  const isVercelPreview = host.endsWith(".vercel.app"); // preview URLs
-  const tenant =
-    tenantHeader ||
-    (isVercelPreview ? "primary" : getTenantFromHost(host)) ||
-    "primary";
+const host = (await headers()).get("host") ?? "";
+const isVercelPreview = host.endsWith(".vercel.app");
+const tenant = isVercelPreview ? "primary" : (h.get("x-tenant-id") ?? getTenantFromHost(host) ?? "primary");
+
   // Normalize incoming headers
   const incoming: Record<string, string> = {};
   if (init.headers instanceof Headers) {
