@@ -1,87 +1,108 @@
 // src/app/dashboard/page.tsx
+export const runtime = "nodejs"; // ensure Node runtime for server actions
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getSessionToken, clearSessionToken } from "@/lib/cookies";
 
-type LoginReply = { token: string };
+type LoginReply = { token?: string };
+type Json = Record<string, unknown> | string | null;
+
+async function apiFetch(path: string, init?: RequestInit) {
+  "use server";
+  const base = process.env.EB_API_BASE!;
+  const res = await fetch(`${base}${path}`, {
+    ...init,
+    headers: {
+      "X-Tenant-Id": "primary",
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+    cache: "no-store",
+  });
+  return res;
+}
+
+async function getJson(res: Response): Promise<Json> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
 
 export default async function Dashboard() {
-  // Require login to view the page
+  // Require login to view page
   const initialToken = await getSessionToken();
   if (!initialToken) redirect("/sign-in");
 
-  // Show API status via a simple direct fetch
-  async function loadStatus() {
-    "use server";
-    const base = process.env.EB_API_BASE!;
-    const res = await fetch(`${base}/status`, {
-      headers: { "X-Tenant-Id": "primary", "Content-Type": "application/json" },
-      cache: "no-store",
-    });
+  // Load status (non-fatal)
+  const status = await (async () => {
     try {
-      return await res.json();
+      const r = await apiFetch("/status");
+      return await getJson(r);
     } catch {
-      return { ok: false, error: "status parse failed" };
+      return { ok: false, error: "status fetch failed" };
     }
-  }
-  const status = await loadStatus();
+  })();
 
-  // Always login inside the action (preview-safe), then call the action with explicit headers.
+  // Always login inside the action to get a fresh token (preview-safe)
   async function runOnDemandRead() {
     "use server";
-    const base = process.env.EB_API_BASE!;
-    // 1) login for a fresh JWT
-    const loginRes = await fetch(`${base}/auth/login`, {
+    const loginRes = await apiFetch("/auth/login", {
       method: "POST",
-      headers: { "X-Tenant-Id": "primary", "Content-Type": "application/json" },
       body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
-      cache: "no-store",
     });
-    const login = (await loginRes.json()) as LoginReply;
-    if (!login?.token) throw new Error(`Login failed or missing token: ${await loginRes.text()}`);
+    const loginBody = (await getJson(loginRes)) as LoginReply;
 
-    // 2) call the action with explicit Authorization + tenant
-    const actionRes = await fetch(`${base}/actions/on-demand-read`, {
+    if (!loginRes.ok) {
+      throw new Error(`LOGIN FAILED ${loginRes.status}: ${JSON.stringify(loginBody)}`);
+    }
+    if (!loginBody?.token) {
+      throw new Error(`LOGIN MISSING TOKEN: ${JSON.stringify(loginBody)}`);
+    }
+
+    const actRes = await apiFetch("/actions/on-demand-read", {
       method: "POST",
-      headers: {
-        "X-Tenant-Id": "primary",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${login.token}`,
-      },
-      cache: "no-store",
+      headers: { Authorization: `Bearer ${loginBody.token}` },
     });
-    if (!actionRes.ok) throw new Error(`/actions/on-demand-read ${actionRes.status}: ${await actionRes.text()}`);
+    if (!actRes.ok) {
+      const body = await getJson(actRes);
+      throw new Error(`/actions/on-demand-read ${actRes.status}: ${JSON.stringify(body)}`);
+    }
 
     revalidatePath("/dashboard");
   }
 
   async function runOnDemandWrite() {
     "use server";
-    const base = process.env.EB_API_BASE!;
-    const loginRes = await fetch(`${base}/auth/login`, {
+    const loginRes = await apiFetch("/auth/login", {
       method: "POST",
-      headers: { "X-Tenant-Id": "primary", "Content-Type": "application/json" },
       body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
-      cache: "no-store",
     });
-    const login = (await loginRes.json()) as LoginReply;
-    if (!login?.token) throw new Error(`Login failed or missing token: ${await loginRes.text()}`);
+    const loginBody = (await getJson(loginRes)) as LoginReply;
 
-    const actionRes = await fetch(`${base}/actions/on-demand-write`, {
+    if (!loginRes.ok) {
+      throw new Error(`LOGIN FAILED ${loginRes.status}: ${JSON.stringify(loginBody)}`);
+    }
+    if (!loginBody?.token) {
+      throw new Error(`LOGIN MISSING TOKEN: ${JSON.stringify(loginBody)}`);
+    }
+
+    const actRes = await apiFetch("/actions/on-demand-write", {
       method: "POST",
-      headers: {
-        "X-Tenant-Id": "primary",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${login.token}`,
-      },
-      cache: "no-store",
+      headers: { Authorization: `Bearer ${loginBody.token}` },
     });
-    if (!actionRes.ok) throw new Error(`/actions/on-demand-write ${actionRes.status}: ${await actionRes.text()}`);
+    if (!actRes.ok) {
+      const body = await getJson(actRes);
+      throw new Error(`/actions/on-demand-write ${actRes.status}: ${JSON.stringify(body)}`);
+    }
 
     revalidatePath("/dashboard");
   }
 
-  // Clear the cookie directly (no relative fetch) and redirect
+  // Clear cookie directly (no relative fetch) and go to sign-in
   async function logout() {
     "use server";
     await clearSessionToken();
