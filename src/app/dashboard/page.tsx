@@ -52,7 +52,7 @@ export default async function Dashboard() {
   "use server";
   const base = process.env.EB_API_BASE!;
 
-  // 1) Login: get fresh JWT
+  // 1) Login for a fresh JWT
   const loginRes = await fetch(`${base}/auth/login`, {
     method: "POST",
     headers: {
@@ -63,28 +63,30 @@ export default async function Dashboard() {
     body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
     cache: "no-store",
   });
+
   const loginBody = await loginRes.json().catch(async () => ({ raw: await loginRes.text() }));
-  if (!loginRes.ok || !loginBody?.token) {
+  const token = (loginBody as { token?: string })?.token;
+  if (!loginRes.ok || !token) {
     throw new Error(`LOGIN ${loginRes.status}: ${JSON.stringify(loginBody)}`);
   }
 
-  // 2) Action: send BOTH header casings + explicit empty body
+  // 2) Explicit headers via Headers()
+  const hdrs = new Headers();
+  hdrs.set("X-Tenant-Id", "primary");
+  hdrs.set("Authorization", `Bearer ${token}`);
+  hdrs.set("Accept", "application/json");
+  hdrs.set("Content-Type", "application/json");
+
   const actRes = await fetch(`${base}/actions/on-demand-read`, {
     method: "POST",
-    headers: {
-      "X-Tenant-Id": "primary",
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      "Authorization": `Bearer ${loginBody.token}`,
-      "authorization": `Bearer ${loginBody.token}`,
-      "Content-Length": "2",
-    },
-    body: "{}",            // explicit tiny JSON body
+    headers: hdrs,
+    body: "{}",           // small JSON body is fine, but not required
     cache: "no-store",
   });
-  const actBody = await actRes.text();
+
+  const actText = await actRes.text().catch(() => "");
   if (!actRes.ok) {
-    throw new Error(`/actions/on-demand-read ${actRes.status}: ${actBody || actRes.statusText}`);
+    throw new Error(`/actions/on-demand-read ${actRes.status}: ${actText || actRes.statusText}`);
   }
 
   revalidatePath("/dashboard");
@@ -104,27 +106,29 @@ async function runOnDemandWrite() {
     body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
     cache: "no-store",
   });
+
   const loginBody = await loginRes.json().catch(async () => ({ raw: await loginRes.text() }));
-  if (!loginRes.ok || !loginBody?.token) {
+  const token = (loginBody as { token?: string })?.token;
+  if (!loginRes.ok || !token) {
     throw new Error(`LOGIN ${loginRes.status}: ${JSON.stringify(loginBody)}`);
   }
 
+  const hdrs = new Headers();
+  hdrs.set("X-Tenant-Id", "primary");
+  hdrs.set("Authorization", `Bearer ${token}`);
+  hdrs.set("Accept", "application/json");
+  hdrs.set("Content-Type", "application/json");
+
   const actRes = await fetch(`${base}/actions/on-demand-write`, {
     method: "POST",
-    headers: {
-      "X-Tenant-Id": "primary",
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      "Authorization": `Bearer ${loginBody.token}`,
-      "authorization": `Bearer ${loginBody.token}`,
-      "Content-Length": "2",
-    },
-    body: "{}",            // explicit tiny JSON body
+    headers: hdrs,
+    body: "{}",           // small JSON body is fine, but not required
     cache: "no-store",
   });
-  const actBody = await actRes.text();
+
+  const actText = await actRes.text().catch(() => "");
   if (!actRes.ok) {
-    throw new Error(`/actions/on-demand-write ${actRes.status}: ${actBody || actRes.statusText}`);
+    throw new Error(`/actions/on-demand-write ${actRes.status}: ${actText || actRes.statusText}`);
   }
 
   revalidatePath("/dashboard");
