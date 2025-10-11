@@ -1,7 +1,6 @@
 // src/app/dashboard/page.tsx
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { ebFetch } from "@/lib/eb";
 import { getSessionToken, clearSessionToken } from "@/lib/cookies";
 
 type LoginReply = { token: string };
@@ -11,46 +10,78 @@ export default async function Dashboard() {
   const initialToken = await getSessionToken();
   if (!initialToken) redirect("/sign-in");
 
-  // Status block
-  const status = await ebFetch("/status")
-    .then((r) => r.json())
-    .catch(() => ({ ok: false, error: "status fetch failed" }));
+  // Show API status via a simple direct fetch
+  async function loadStatus() {
+    "use server";
+    const base = process.env.EB_API_BASE!;
+    const res = await fetch(`${base}/status`, {
+      headers: { "X-Tenant-Id": "primary", "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+    try {
+      return await res.json();
+    } catch {
+      return { ok: false, error: "status parse failed" };
+    }
+  }
+  const status = await loadStatus();
 
-  // Server action: always log in (preview-safe), then run READ
+  // Always login inside the action (preview-safe), then call the action with explicit headers.
   async function runOnDemandRead() {
     "use server";
-    const login = await ebFetch("/auth/login", {
+    const base = process.env.EB_API_BASE!;
+    // 1) login for a fresh JWT
+    const loginRes = await fetch(`${base}/auth/login`, {
       method: "POST",
+      headers: { "X-Tenant-Id": "primary", "Content-Type": "application/json" },
       body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
-      headers: { "Content-Type": "application/json" },
-    }).then((r) => r.json() as Promise<LoginReply>);
-
-    await ebFetch("/actions/on-demand-read", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${login.token}` },
+      cache: "no-store",
     });
+    const login = (await loginRes.json()) as LoginReply;
+    if (!login?.token) throw new Error(`Login failed or missing token: ${await loginRes.text()}`);
+
+    // 2) call the action with explicit Authorization + tenant
+    const actionRes = await fetch(`${base}/actions/on-demand-read`, {
+      method: "POST",
+      headers: {
+        "X-Tenant-Id": "primary",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${login.token}`,
+      },
+      cache: "no-store",
+    });
+    if (!actionRes.ok) throw new Error(`/actions/on-demand-read ${actionRes.status}: ${await actionRes.text()}`);
 
     revalidatePath("/dashboard");
   }
 
-  // Server action: always log in (preview-safe), then run WRITE
   async function runOnDemandWrite() {
     "use server";
-    const login = await ebFetch("/auth/login", {
+    const base = process.env.EB_API_BASE!;
+    const loginRes = await fetch(`${base}/auth/login`, {
       method: "POST",
+      headers: { "X-Tenant-Id": "primary", "Content-Type": "application/json" },
       body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
-      headers: { "Content-Type": "application/json" },
-    }).then((r) => r.json() as Promise<LoginReply>);
-
-    await ebFetch("/actions/on-demand-write", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${login.token}` },
+      cache: "no-store",
     });
+    const login = (await loginRes.json()) as LoginReply;
+    if (!login?.token) throw new Error(`Login failed or missing token: ${await loginRes.text()}`);
+
+    const actionRes = await fetch(`${base}/actions/on-demand-write`, {
+      method: "POST",
+      headers: {
+        "X-Tenant-Id": "primary",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${login.token}`,
+      },
+      cache: "no-store",
+    });
+    if (!actionRes.ok) throw new Error(`/actions/on-demand-write ${actionRes.status}: ${await actionRes.text()}`);
 
     revalidatePath("/dashboard");
   }
 
-  // Server action: clear the cookie directly (no relative fetch)
+  // Clear the cookie directly (no relative fetch) and redirect
   async function logout() {
     "use server";
     await clearSessionToken();
@@ -63,21 +94,14 @@ export default async function Dashboard() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <form action={runOnDemandRead}>
-          <button className="w-full rounded bg-black text-white py-3">
-            Run On-Demand Read
-          </button>
+          <button className="w-full rounded bg-black text-white py-3">Run On-Demand Read</button>
         </form>
-
         <form action={runOnDemandWrite}>
-          <button className="w-full rounded bg-black text-white py-3">
-            Run On-Demand Write
-          </button>
+          <button className="w-full rounded bg-black text-white py-3">Run On-Demand Write</button>
         </form>
       </div>
 
-      <pre className="text-sm bg-neutral-100 p-3 rounded">
-        {JSON.stringify(status, null, 2)}
-      </pre>
+      <pre className="text-sm bg-neutral-100 p-3 rounded">{JSON.stringify(status, null, 2)}</pre>
 
       <form action={logout}>
         <button className="rounded border py-2 px-3">Sign out</button>
@@ -85,4 +109,5 @@ export default async function Dashboard() {
     </main>
   );
 }
+
 
