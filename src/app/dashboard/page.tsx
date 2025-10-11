@@ -49,58 +49,86 @@ export default async function Dashboard() {
 
   // Always login inside the action to get a fresh token (preview-safe)
   async function runOnDemandRead() {
-    "use server";
-    const loginRes = await apiFetch("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
-    });
-    const loginBody = (await getJson(loginRes)) as LoginReply;
+  "use server";
+  const base = process.env.EB_API_BASE!;
 
-    if (!loginRes.ok) {
-      throw new Error(`LOGIN FAILED ${loginRes.status}: ${JSON.stringify(loginBody)}`);
-    }
-    if (!loginBody?.token) {
-      throw new Error(`LOGIN MISSING TOKEN: ${JSON.stringify(loginBody)}`);
-    }
-
-    const actRes = await apiFetch("/actions/on-demand-read", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${loginBody.token}` },
-    });
-    if (!actRes.ok) {
-      const body = await getJson(actRes);
-      throw new Error(`/actions/on-demand-read ${actRes.status}: ${JSON.stringify(body)}`);
-    }
-
-    revalidatePath("/dashboard");
+  // 1) Login: get fresh JWT
+  const loginRes = await fetch(`${base}/auth/login`, {
+    method: "POST",
+    headers: {
+      "X-Tenant-Id": "primary",
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
+    cache: "no-store",
+  });
+  const loginBody = await loginRes.json().catch(async () => ({ raw: await loginRes.text() }));
+  if (!loginRes.ok || !loginBody?.token) {
+    throw new Error(`LOGIN ${loginRes.status}: ${JSON.stringify(loginBody)}`);
   }
 
-  async function runOnDemandWrite() {
-    "use server";
-    const loginRes = await apiFetch("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
-    });
-    const loginBody = (await getJson(loginRes)) as LoginReply;
-
-    if (!loginRes.ok) {
-      throw new Error(`LOGIN FAILED ${loginRes.status}: ${JSON.stringify(loginBody)}`);
-    }
-    if (!loginBody?.token) {
-      throw new Error(`LOGIN MISSING TOKEN: ${JSON.stringify(loginBody)}`);
-    }
-
-    const actRes = await apiFetch("/actions/on-demand-write", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${loginBody.token}` },
-    });
-    if (!actRes.ok) {
-      const body = await getJson(actRes);
-      throw new Error(`/actions/on-demand-write ${actRes.status}: ${JSON.stringify(body)}`);
-    }
-
-    revalidatePath("/dashboard");
+  // 2) Action: send BOTH header casings + explicit empty body
+  const actRes = await fetch(`${base}/actions/on-demand-read`, {
+    method: "POST",
+    headers: {
+      "X-Tenant-Id": "primary",
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Authorization": `Bearer ${loginBody.token}`,
+      "authorization": `Bearer ${loginBody.token}`,
+      "Content-Length": "2",
+    },
+    body: "{}",            // explicit tiny JSON body
+    cache: "no-store",
+  });
+  const actBody = await actRes.text();
+  if (!actRes.ok) {
+    throw new Error(`/actions/on-demand-read ${actRes.status}: ${actBody || actRes.statusText}`);
   }
+
+  revalidatePath("/dashboard");
+}
+
+async function runOnDemandWrite() {
+  "use server";
+  const base = process.env.EB_API_BASE!;
+
+  const loginRes = await fetch(`${base}/auth/login`, {
+    method: "POST",
+    headers: {
+      "X-Tenant-Id": "primary",
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({ email: "demo@you.com", password: "demo" }),
+    cache: "no-store",
+  });
+  const loginBody = await loginRes.json().catch(async () => ({ raw: await loginRes.text() }));
+  if (!loginRes.ok || !loginBody?.token) {
+    throw new Error(`LOGIN ${loginRes.status}: ${JSON.stringify(loginBody)}`);
+  }
+
+  const actRes = await fetch(`${base}/actions/on-demand-write`, {
+    method: "POST",
+    headers: {
+      "X-Tenant-Id": "primary",
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Authorization": `Bearer ${loginBody.token}`,
+      "authorization": `Bearer ${loginBody.token}`,
+      "Content-Length": "2",
+    },
+    body: "{}",            // explicit tiny JSON body
+    cache: "no-store",
+  });
+  const actBody = await actRes.text();
+  if (!actRes.ok) {
+    throw new Error(`/actions/on-demand-write ${actRes.status}: ${actBody || actRes.statusText}`);
+  }
+
+  revalidatePath("/dashboard");
+}
 
   // Clear cookie directly (no relative fetch) and go to sign-in
   async function logout() {
